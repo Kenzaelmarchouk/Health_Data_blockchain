@@ -97,6 +97,20 @@ const IdentityPage = () => {
     createPatient(); // invoke createPatient function
   };
   
+ // Call authorizeDoctor function to authorize or reject a doctor's request
+async function respondToAuthorizationRequest(doctorAddress, isAuthorized) {
+  try {
+    await healthDataContractInstance.methods
+      .authorizeDoctor(doctorAddress, isAuthorized)
+      .send({ from: window.ethereum.selectedAddress });
+    // Handle success
+    console.log('Authorization response sent successfully!');
+  } catch (error) {
+    // Handle error
+    console.error('Failed to send authorization response:', error);
+  }
+}
+  
 
  return (
   
@@ -182,6 +196,7 @@ const IdentityPage = () => {
     <p>Telephone: {Data.telephone}</p>
   </div>
 )}
+
       
         
 

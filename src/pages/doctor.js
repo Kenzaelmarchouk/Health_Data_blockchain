@@ -55,6 +55,19 @@ const DoctorPage = () => {
         console.error('Error:', error);
       }
 }
+// Call requestAuthorization function to send a request to the patient for authorization
+async function sendAuthorizationRequest(patientAddress) {
+  try {
+    await healthDataContractInstance.methods
+      .requestAuthorization(patientAddress)
+      .send({ from: window.ethereum.selectedAddress });
+    // Handle success
+    console.log('Authorization request sent successfully!');
+  } catch (error) {
+    // Handle error
+    console.error('Failed to send authorization request:', error);
+  }
+}
   return(
     <div>
       <header className="bg-dark text-white text-center py-5">

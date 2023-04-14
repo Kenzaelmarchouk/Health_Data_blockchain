@@ -4,9 +4,9 @@ pragma experimental ABIEncoderV2;
 
 
 contract HealthData {
-  address public owner;
-     
-   struct Patient {
+    address public owner;
+    
+    struct Patient {
         address patientAddress;
         string name;
         uint256 birthDate;
@@ -14,82 +14,87 @@ contract HealthData {
         string email;
         string telephone;
         bool created;
-        //HealthRecord[] HealthRecords;
-
+        mapping(address => bool) authorizedDoctors;
+        HealthRecord[] healthRecords;
     }
+    
     struct HealthRecord {
-    uint256 healthRecordId;    
-    uint256 height;             // height in centimeters
-    uint256 weight;             // weight in kilograms
-    string bloodType;           // blood type
-    string treatmentHash;
-    address doctorAddress;
-}
- struct Doctor {
+        uint256 healthRecordId;    
+        string treatmentHash;
         address doctorAddress;
-        string name;
-        string hospital;
-        bool authorized;
     }
-mapping(address => Patient) public patients;
-mapping(address => HealthRecord[]) public healthRecords;
-mapping(address => Doctor) public doctors;
+    
+    mapping(address => Patient) public patients;
+    
+    event PatientCreated(address indexed patientAddress, string name, uint256 birthDate, string homeaddress, string email, string telephone);
+    event HealthRecordCreated(address indexed patientAddress, address indexed doctorAddress, uint256 indexed healthRecordId, string treatmentHash);
+    event AuthorizationRequested(address indexed patientAddress, address indexed doctorAddress);
+    event AuthorizationApproved(address indexed patientAddress, address indexed doctorAddress);
+    event AuthorizationRevoked(address indexed patientAddress, address indexed doctorAddress);
+    
+    function createPatient(string memory _name, uint256 _birthdate, string memory _homeaddress, string memory _email, string memory _telephone) public {
+        // Ensure that the patient has not already created their identity
+        require(patients[msg.sender].created == false, "Patient identity already exists");
 
-event PatientCreated(address indexed patientAddress, string name, uint256 birthDate, string homeaddress, string email, string telephone);
-function createPatient(string memory _name, uint256 _birthdate, string memory _homeaddress, string memory _email, string memory _telephone) public {
-    // Ensure that the patient has not already created their identity
-    require(patients[msg.sender].created == false, "Patient identity already exists");
-
-    // Create the patient identity
-    Patient storage patient = patients[msg.sender];
-    patient.name = _name;
-    patient.birthDate = _birthdate;
-    patient.homeaddress = _homeaddress;
-    patient.email = _email;
-    patient.telephone = _telephone;
-    patient.created = true;
+        // Create the patient identity
+        Patient storage patient = patients[msg.sender];
+        patient.patientAddress = msg.sender;
+        patient.name = _name;
+        patient.birthDate = _birthdate;
+        patient.homeaddress = _homeaddress;
+        patient.email = _email;
+        patient.telephone = _telephone;
+        patient.created = true;
+        
         // Emit an event to signal that a new patient has been created
         emit PatientCreated(msg.sender, _name, _birthdate, _homeaddress, _email, _telephone);
     }
 
-
-/////////////// HealthRecord ///////////
-event HealthRecordCreated(address indexed patientAddress, address indexed doctorAddress ,uint256 indexed healthRecordId, uint256 height, uint256 weight, string bloodType, string treatmentHash);
-function createHealthRecord(address _patientAddress, uint256 _healthRecordId, uint256 _height, uint256 _weight, string memory _bloodType, string memory _treatmentHash) public {
-    require(doctors[msg.sender].authorized, "You are not an authorized doctor");
-    // Make sure the patient has an identity created
-    //require(patients[msg.sender].created == true, "Patient identity not found");
-    require(patients[_patientAddress].created, "The patient is not registered");
-        _healthRecordId = healthRecords[_patientAddress].length + 1;
-        HealthRecord memory healthRecord = HealthRecord(_healthRecordId, _height, _weight, _bloodType, _treatmentHash, msg.sender);
-        healthRecords[_patientAddress].push(healthRecord);
-        emit HealthRecordCreated(_patientAddress, msg.sender, _healthRecordId, _height, _weight, _bloodType, _treatmentHash);
-    
-}
-function createDoctor(string memory _name, string memory _hospital) public {
-        require(!doctors[msg.sender].authorized, "Doctor already exists");
-        doctors[msg.sender] = Doctor(msg.sender, _name, _hospital, true);
-    }
-////////////// authorized dactors and revok
- function authorizeDoctor(address _doctorAddress) public {
-        require(doctors[msg.sender].authorized, "You are not an authorized doctor");
-        doctors[_doctorAddress].authorized = true;
+    function createHealthRecord(address _patientAddress, uint256 _healthRecordId, string memory _treatmentHash, address _sender) public {
+        require(patients[_patientAddress].created, "The patient is not registered");
+        require(patients[_patientAddress].authorizedDoctors[_sender], "You are not an authorized doctor");
+        
+        _healthRecordId = patients[_patientAddress].healthRecords.length + 1;
+        HealthRecord memory healthRecord = HealthRecord(_healthRecordId, _treatmentHash, _sender);
+        patients[_patientAddress].healthRecords.push(healthRecord);
+        
+        emit HealthRecordCreated(_patientAddress, _sender, _healthRecordId, _treatmentHash);
     }
 
-    function revokeDoctor(address _doctorAddress) public {
-        require(doctors[msg.sender].authorized, "You are not an authorized doctor");
-        doctors[_doctorAddress].authorized = false;
-    }    
-/////////////////View HealthData
-function viewPatient(address patientAddress) public view returns (string memory, uint256, string memory, string memory, string memory, HealthRecord[] memory) {
-    require(patients[patientAddress].created == true, "Patient does not exist");
-    return (patients[patientAddress].name, patients[patientAddress].birthDate, patients[patientAddress].homeaddress, patients[patientAddress].email, patients[patientAddress].telephone, healthRecords[patientAddress]);
-}
+    function viewPatientData(address _patientAddress, address _sender) public view returns (string memory, uint256, string memory, string memory, string memory, HealthRecord[] memory) {
+        Patient storage patient = patients[_patientAddress];
+        require(patient.created, "Patient does not exist");
+        require(patient.authorizedDoctors[_sender], "Doctor is not authorized to view patient data");
 
-function getDoctorRecords(address _patientAddress) public view returns (HealthRecord[] memory) {
-        require(doctors[msg.sender].authorized, "You are not an authorized doctor");
+        return (patient.name, patient.birthDate, patient.homeaddress, patient.email, patient.telephone, patient.healthRecords);
+    }
+
+    function requestAuthorization(address _patientAddress) public {
         require(patients[_patientAddress].created, "Patient does not exist");
-        return healthRecords[_patientAddress];
+        require(!patients[_patientAddress].authorizedDoctors[msg.sender], "Doctor is already authorized");
+        // Update the authorizedDoctors mapping
+    patients[_patientAddress].authorizedDoctors[msg.sender] = false;
+
+        emit AuthorizationRequested(_patientAddress, msg.sender);
     }
 
+     function sendAuthorizationRequest(address _patientAddress, address _doctorAddress) public {
+        require(patients[_patientAddress].created, "Patient does not exist");
+        require(patients[_patientAddress].patientAddress == msg.sender, "Only patient can send authorization request");
+
+        // Add doctor to authorized doctors mapping
+        patients[_patientAddress].authorizedDoctors[_doctorAddress] = true;
+
+        // Emit an event to signal that an authorization request has been sent
+        emit AuthorizationApproved(_patientAddress, _doctorAddress);
+    }
+    function revokeAuthorization(address _patientAddress, address _doctorAddress) public {
+    require(patients[_patientAddress].created, "Patient does not exist");
+    require(patients[_patientAddress].authorizedDoctors[_doctorAddress], "Doctor is not authorized");
+
+    // Update the authorizedDoctors mapping
+    patients[_patientAddress].authorizedDoctors[_doctorAddress] = false;
+
+    emit AuthorizationRevoked(_patientAddress, _doctorAddress);
 }
+    }    
